@@ -1,0 +1,234 @@
+---
+title: "England Cycling and Walking 2018"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+library(readODS)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+
+cycle_walk18 <- read_ods(
+  "walking-and-cycling-statistics-england-2018/CW0305.ods",
+  sheet = 1, skip = 6) %>%
+  as_tibble(.name_repair = "unique")
+
+cycle_walk17 <- read_ods(
+  "walking-and-cycling-statistics-england-2018/CW0305.ods", 
+  sheet = 2, skip = 6) %>%
+  as_tibble(.name_repair = "unique")
+
+cycle_walk16 <- read_ods(
+  "walking-and-cycling-statistics-england-2018/CW0305.ods",
+  sheet = 3, skip = 6) %>%
+  as_tibble(.name_repair = "unique")
+
+name_vector <- c(NA, NA, rep("Any walking or cycling", 4), NA,
+                 rep("Any walking", 4), NA, rep("Walking for leisure5", 4), NA,
+                 rep("Walking for travel", 4), NA, rep("Any cycling", 4), NA,
+                 rep("Cycling for leisure5", 4), NA, 
+                 rep("Cycling for travel", 4))
+
+
+names(cycle_walk18) <- paste0(name_vector, ": ", names(cycle_walk18))
+names(cycle_walk17) <- paste0(name_vector, ": ", names(cycle_walk17))
+names(cycle_walk16) <- paste0(name_vector, ": ", names(cycle_walk16))
+
+cycle_walk18$year <- "2017/2018"
+cycle_walk17$year <- "2016/2017"
+cycle_walk16$year <- "2015/2016"
+
+div <- function(x, na.rm = FALSE) x/100
+
+cycle_walk <- bind_rows(cycle_walk18, cycle_walk17, cycle_walk16)
+
+cycle_walk <- cycle_walk %>% 
+  select(-`NA: At least:`, -`NA: ...7`, -`NA: ...12`, -`NA: ...17`, -`NA: ...22`,
+         -`NA: ...27`, -`NA: ...32`) %>% 
+  filter(!is.na(`Any walking or cycling: Once per month...3`)) %>%
+  rename(demographic = `NA: Demographic4`) %>% 
+  mutate_if(is.numeric, div)
+
+
+names(cycle_walk) <- str_replace_all(names(cycle_walk), "\\.\\.\\.[0-9].*$", "")
+names(cycle_walk) <- str_replace_all(names(cycle_walk), "[0-9]", "")
+
+cycle_walk <- cycle_walk %>%
+  gather(key = "type", value = "value", -year, -demographic) %>%
+  separate(type, into = c("mode", "frequency"), sep = ": ", remove = FALSE) %>%
+  mutate(frequency = factor(frequency, 
+                            levels=c("Once per month", "Once per week",
+                                     "Three times per week", 
+                                     "Five times per week")))
+  
+
+
+p1 <- ggplot(data = cycle_walk %>%
+               filter(demographic %in% c("Limiting disability", 
+                                         "Non-limiting disability",
+                                         "No disability"),
+                      type == "Any walking or cycling: Once per month"),
+             aes(x = year, y = value, 
+                 colour = demographic, group = demographic)) + 
+  geom_line(size = 1.25, alpha = 0.7) + 
+  scale_color_viridis_d(name = "") + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "Year", y = "",  
+       title = "Percent of people walking or cycling at least once per month",
+       subtitle = "Data from: \"Walking and cycling statistics, England: 2018\", published by the DfT",
+       caption = "(c) 2019 Evan Odell | Disability Rights UK | CC-BY-SA") + 
+  theme(legend.position = "bottom", title = element_text(size = 8))
+
+
+p1
+
+ggsave("1_disable_walking_cycling.png", p1, type = "cairo-png")
+
+p1a <- ggplot(data = cycle_walk %>%
+               filter(demographic %in% c("Limiting disability", 
+                                         "Non-limiting disability",
+                                         "No disability"),
+                      type == "Any walking or cycling: Five times per week"),
+             aes(x = year, y = value, 
+                 colour = demographic, group = demographic)) + 
+  geom_line(size = 1.25, alpha = 0.7) + 
+  scale_color_viridis_d(name = "") + 
+  scale_y_continuous(labels = scales::percent, 
+                     breaks = c(0.25, 0.275, 0.3, 0.325, 0.35, 0.375, 0.4)) + 
+  labs(x = "Year", y = "",  
+       title = "Percent of people walking or cycling at least five times per week",
+       subtitle = "Data from: \"Walking and cycling statistics, England: 2018\", published by the DfT",
+       caption = "(c) 2019 Evan Odell | Disability Rights UK | CC-BY-SA") + 
+  theme(legend.position = "bottom", title = element_text(size = 8))
+
+
+p1a
+
+ggsave("1a_disable_walking_cycling.png", p1a, type = "cairo-png")
+
+
+
+p2 <- ggplot(data = cycle_walk %>%
+               filter(demographic %in% c("Limiting disability", 
+                                         "Non-limiting disability",
+                                         "No disability"),
+                      mode == "Cycling for travel"),
+             aes(x = year, y = value, 
+                 colour = demographic, group = demographic)) + 
+  geom_line(size = 0.95, alpha = 0.75) + 
+  scale_color_viridis_d(name = "") + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "Year", y = "",  
+       title = "Percent of disabled and non-disabled people cycling for travel",
+       subtitle = "Data from: \"Walking and cycling statistics, England: 2018\", published by the DfT",
+       caption = "(c) 2019 Evan Odell | Disability Rights UK | CC-BY-SA") + 
+  theme(legend.position = "bottom", title = element_text(size = 8)) + 
+  facet_wrap(~frequency)
+
+
+p2
+
+ggsave("2_disable_cycling_travel.png", p2, type = "cairo-png")
+
+p3 <- ggplot(data = cycle_walk %>%
+               filter(demographic %in% c("Limiting disability", 
+                                         "Non-limiting disability",
+                                         "No disability"),
+                      mode == "Any cycling"),
+             aes(x = year, y = value, 
+                 colour = demographic, group = demographic)) + 
+  geom_line(size = 0.95, alpha = 0.75) + 
+  scale_color_viridis_d(name = "") + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "Year", y = "",  
+       title = "Percent of disabled and non-disabled people cycling for any purpose",
+       subtitle = "Data from: \"Walking and cycling statistics, England: 2018\", published by the DfT",
+       caption = "(c) 2019 Evan Odell | Disability Rights UK | CC-BY-SA")  + 
+  theme(legend.position = "bottom", title = element_text(size = 8)) + 
+  facet_wrap(~frequency)
+
+
+p3
+
+ggsave("3_disable_cycling_any.png", p3, type = "cairo-png")
+
+
+p4 <- ggplot(data = cycle_walk %>%
+               filter(demographic %in% c("Limiting disability", 
+                                         "Non-limiting disability",
+                                         "No disability"),
+                      mode == "Any walking"),
+             aes(x = year, y = value, 
+                 colour = demographic, group = demographic)) + 
+  geom_line(size = 0.95, alpha = 0.75) + 
+  scale_color_viridis_d(name = "") + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "Year", y = "",  
+       title = "Percent of disabled and non-disabled people walking for any purpose",
+       subtitle = "Data from: \"Walking and cycling statistics, England: 2018\", published by the DfT",
+       caption = "(c) 2019 Evan Odell | Disability Rights UK | CC-BY-SA")  + 
+  theme(legend.position = "bottom", title = element_text(size = 8)) + 
+  facet_wrap(~frequency)
+
+
+p4
+
+ggsave("4_disable_walking_any.png", p4, type = "cairo-png")
+
+
+
+p5 <- ggplot(data = cycle_walk %>%
+               filter(demographic %in% c("Limiting disability", 
+                                         "Non-limiting disability",
+                                         "No disability"),
+                      mode == "Walking for leisure"),
+             aes(x = year, y = value, 
+                 colour = demographic, group = demographic)) + 
+  geom_line(size = 0.95, alpha = 0.75) + 
+  scale_color_viridis_d(name = "") + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "Year", y = "",  
+       title = "Percent of disabled and non-disabled people walking for leisure",
+       subtitle = "Data from: \"Walking and cycling statistics, England: 2018\", published by the DfT",
+       caption = "(c) 2019 Evan Odell | Disability Rights UK | CC-BY-SA")  + 
+  theme(legend.position = "bottom", title = element_text(size = 8)) + 
+  facet_wrap(~frequency)
+
+
+p5
+
+ggsave("5_disable_walking_leisure.png", p5, type = "cairo-png")
+
+
+
+p6 <- ggplot(data = cycle_walk %>%
+               filter(demographic %in% c("Limiting disability", 
+                                         "Non-limiting disability",
+                                         "No disability"),
+                      mode == "Cycling for leisure"),
+             aes(x = year, y = value, 
+                 colour = demographic, group = demographic)) + 
+  geom_line(size = 0.95, alpha = 0.75) + 
+  scale_color_viridis_d(name = "") + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "Year", y = "",  
+       title = "Percent of disabled and non-disabled people cycling for leisure",
+       subtitle = "Data from: \"Walking and cycling statistics, England: 2018\", published by the DfT",
+       caption = "(c) 2019 Evan Odell | Disability Rights UK | CC-BY-SA")  + 
+  theme(legend.position = "bottom", title = element_text(size = 8)) + 
+  facet_wrap(~frequency)
+
+
+p6
+
+ggsave("6_disable_cycling_leisure.png", p6, type = "cairo-png")
+
+
+```
+
+
